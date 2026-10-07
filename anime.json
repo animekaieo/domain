@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>animekairo — аниме для своих</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Unbounded:wght@400;500;700;800&display=swap&subset=cyrillic" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { bg: '#050505', card: '#121214', silver: '#a1a1aa' },
+  fontFamily: { display: ['Unbounded','system-ui','sans-serif'], sans: ['Manrope','system-ui','sans-serif'] },
+  boxShadow: { glow: '0 0 15px rgba(255,255,255,0.15)', 'glow-lg': '0 0 15px rgba(255,255,255,0.15), 0 0 50px rgba(255,255,255,0.06)' }
+}}}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+:root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { scroll-behavior: smooth; scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 70px); }
+body { margin: 0; background: #050505; color: #fff; font-family: Manrope, system-ui, sans-serif;
+  background-image: radial-gradient(60rem 40rem at 90% -10%, rgba(255,255,255,.06), transparent 60%), radial-gradient(50rem 40rem at -10% 40%, rgba(161,161,170,.04), transparent 60%);
+  background-attachment: fixed; }
+::selection { background: rgba(255,255,255,.3); }
+:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+input::placeholder { color: #71717a; }
+input[type=search]::-webkit-search-cancel-button { display: none; }
+.spring { transition: transform .5s cubic-bezier(.34,1.56,.64,1), box-shadow .3s, border-color .3s; }
+@keyframes pulseGlow { 0%,100% { box-shadow: 0 0 12px rgba(255,255,255,.12) } 50% { box-shadow: 0 0 28px rgba(255,255,255,.34) } }
+@keyframes sheen { from { transform: translateX(-120%) skewX(-20deg) } to { transform: translateX(320%) skewX(-20deg) } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(26px) } to { opacity: 1; transform: none } }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes popIn { from { opacity: 0; transform: translateY(50px) scale(.96) } to { opacity: 1; transform: none } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(18px) } to { opacity: 1; transform: none } }
+@keyframes floaty { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+@keyframes spin { to { transform: rotate(360deg) } }
+.pulse-glow { animation: pulseGlow 2.4s ease-in-out infinite; position: relative; overflow: hidden; }
+.pulse-glow::after { content: ''; position: absolute; inset: 0; width: 35%; background: linear-gradient(90deg, transparent, rgba(0,0,0,.14), transparent); animation: sheen 3.6s ease-in-out infinite; }
+.rise { animation: riseIn .8s cubic-bezier(.22,1,.36,1) both; }
+.floaty { animation: floaty 3.5s ease-in-out infinite; }
+.silver-text { background: linear-gradient(110deg, #fff 30%, #a1a1aa 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useLayoutEffect, useRef, useMemo } = React;
+const EASE = 'cubic-bezier(.22,1,.36,1)';
+const KEY = 'animekairo:library';
+
+/* Запасная обложка (SVG) — показывается, если картинка с сервера не загрузилась */
+const art = (glyph, w = 600, h = 900) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><defs>
+  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f3f46"/><stop offset="1" stop-color="#09090b"/></linearGradient>
+  <radialGradient id="r" cx=".75" cy=".25" r=".6"><stop offset="0" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+  <rect width="100%" height="100%" fill="url(#g)"/><rect width="100%" height="100%" fill="url(#r)"/>
+  <text x="${w*0.5}" y="${h*0.62}" font-size="${h*0.5}" font-family="serif" fill="#fff" fill-opacity=".2" text-anchor="middle">${glyph}</text></svg>`);
+
+/* id = ID на Shikimori (совпадает с MyAnimeList). Постеры берутся с shikimori.one */
+const ANIME = [
+  { id: 16498, title: 'Атака титанов', originalTitle: 'Shingeki no Kyojin', rating: 8.5, year: 2013, genres: ['Экшен','Драма','Фэнтези'], glyph: '巨',
+    description: 'Человечество укрылось за гигантскими стенами от титанов — исполинов, пожирающих людей. Когда стена пала, юный Эрен Йегер поклялся уничтожить каждого из них.' },
+  { id: 40748, title: 'Магическая битва', originalTitle: 'Jujutsu Kaisen', rating: 8.6, year: 2020, genres: ['Экшен','Сверхъестественное','Школа'], glyph: '呪',
+    description: 'Старшеклассник Юдзи Итадори проглатывает проклятый палец и становится сосудом для могущественного демона. Теперь его ждёт школа магов-экзорцистов.' },
+  { id: 38000, title: 'Клинок, рассекающий демонов', originalTitle: 'Kimetsu no Yaiba', rating: 8.4, year: 2019, genres: ['Экшен','Сверхъестественное','Исторический'], glyph: '鬼',
+    description: 'После гибели семьи Тандзиро Камадо берётся за меч, чтобы вернуть человеческий облик сестре Незуко и сразиться с демонами, скрывающимися в ночи.' },
+  { id: 44511, title: 'Человек-бензопила', originalTitle: 'Chainsaw Man', rating: 8.4, year: 2022, genres: ['Экшен','Ужасы','Тёмное фэнтези'], glyph: '鎖',
+    description: 'Нищий охотник на демонов Дэндзи сливается со своим псом-демоном и получает бензопилы вместо рук. Теперь он работает на правительство и мечтает о простой жизни.' },
+  { id: 5114, title: 'Стальной алхимик: Братство', originalTitle: 'Fullmetal Alchemist: Brotherhood', rating: 8.8, year: 2009, genres: ['Приключения','Фэнтези','Драма'], glyph: '錬',
+    description: 'Братья Эдвард и Альфонс Элрики нарушили главный закон алхимии и заплатили страшную цену. Теперь они ищут Философский камень, чтобы вернуть утраченное.' },
+].map(a => ({ ...a, poster: `https://shikimori.one/system/animes/original/${a.id}.jpg`, embed: `https://shikicinema.org/embeds/anime/${a.id}` }));
+
+const norm = s => s.toLowerCase().replace(/ё/g, 'е');
+const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* Картинка с автоматической подменой при ошибке загрузки */
+function Img({ a, className, ...rest }) {
+  const [src, setSrc] = useState(a.poster);
+  return <img src={src} alt={a.title} loading="lazy" referrerPolicy="no-referrer" onError={() => setSrc(art(a.glyph))} className={className} {...rest} />;
+}
+
+/* Плавная перестановка сетки (FLIP) — аналог layout-анимаций */
+function FlipGrid({ items, render }) {
+  const els = useRef(new Map()), prev = useRef(new Map()), first = useRef(true);
+  useLayoutEffect(() => {
+    const live = new Set(items.map(a => a.id));
+    items.forEach((a, idx) => {
+      const el = els.current.get(a.id); if (!el) return;
+      const b = el.getBoundingClientRect();
+      const r = { x: b.left + scrollX, y: b.top + scrollY };
+      const p = prev.current.get(a.id);
+      if (!reduced()) {
+        if (p) {
+          const dx = p.x - r.x, dy = p.y - r.y;
+          if (dx || dy) el.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: 'none' }], { duration: 550, easing: EASE });
+        } else {
+          el.animate([{ opacity: 0, transform: 'translateY(32px) scale(.94)' }, { opacity: 1, transform: 'none' }],
+            { duration: 600, delay: first.current ? idx * 70 : Math.min(idx, 6) * 40, easing: EASE, fill: 'backwards' });
+        }
+      }
+      prev.current.set(a.id, r);
+    });
+    [...prev.current.keys()].forEach(k => !live.has(k) && prev.current.delete(k));
+    first.current = false;
+  });
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-5">
+      {items.map(a => <div key={a.id} ref={el => el ? els.current.set(a.id, el) : els.current.delete(a.id)}>{render(a)}</div>)}
+    </div>
+  );
+}
+
+const Bookmark = ({ filled, size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z" /></svg>
+);
+const SearchIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>;
+
+function Logo() {
+  return (
+    <a href="#top" className="group flex items-center gap-2.5" aria-label="animekairo">
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none" className="transition-transform duration-500 group-hover:rotate-[90deg]">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff" /><stop offset="1" stopColor="#71717a" /></linearGradient></defs>
+        <circle cx="16" cy="16" r="14" stroke="url(#lg)" strokeWidth="1.5" />
+        <path d="M13 10.5v11l9-5.5-9-5.5z" fill="url(#lg)" />
+      </svg>
+      <span className="silver-text font-display text-[17px] font-medium lowercase tracking-[0.04em]">animekairo</span>
+    </a>
+  );
+}
+
+function Navbar({ count, onLibrary }) {
+  return (
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-bg/60 backdrop-blur-md" style={{ animation: 'fadeIn .6s both' }}>
+      <nav className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3.5">
+        <div className="flex items-center gap-3">
+          <Logo />
+          <span className="hidden rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-bold text-white shadow-glow sm:inline">для 10 отаку</span>
+        </div>
+        <button onClick={onLibrary} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-medium text-silver transition-all duration-300 hover:-translate-y-0.5 hover:border-white/30 hover:text-white hover:shadow-glow">
+          <Bookmark filled={count > 0} size={16} /> Буду смотреть
+          <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-white px-1.5 text-[11px] font-bold text-black">{count}</span>
+        </button>
+      </nav>
+    </header>
+  );
+}
+
+function Hero({ a, saved, onWatch, onToggle }) {
+  return (
+    <section id="top" className="relative isolate overflow-hidden">
+      <img src={a.poster} alt="" aria-hidden="true" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} className="absolute inset-0 -z-20 h-full w-full scale-125 object-cover opacity-35 blur-2xl" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-bg via-bg/80 to-bg/30" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-bg via-transparent to-bg/40" />
+      <div className="mx-auto grid max-w-7xl items-end gap-10 px-5 pb-14 pt-16 sm:pb-20 sm:pt-24 md:grid-cols-[1fr_280px]">
+        <div>
+          {[
+            <p className="mb-4 text-sm font-bold text-silver">Сейчас в тренде · {a.year}</p>,
+            <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.05] sm:text-6xl">{a.title}</h1>,
+            <p className="mt-2 text-sm text-silver">{a.originalTitle}</p>,
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-sm font-bold">★ {a.rating}</span>
+              {a.genres.map(g => <span key={g} className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-sm text-white/80 backdrop-blur-md">{g}</span>)}
+            </div>,
+            <p className="mt-5 max-w-xl leading-relaxed text-white/75">{a.description}</p>,
+            <div className="mt-8 flex flex-wrap gap-3">
+              <button onClick={() => onWatch(a)} className="pulse-glow spring rounded-xl bg-white px-8 py-4 font-display text-sm font-bold text-black hover:scale-105 active:scale-95">▶ Смотреть</button>
+              <button onClick={() => onToggle(a.id)} className="spring flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 py-4 text-sm font-bold backdrop-blur-md hover:scale-105 hover:border-white/40 hover:shadow-glow active:scale-95">
+                <Bookmark filled={saved} /> {saved ? 'Добавлено' : 'Добавить в библиотеку'}
+              </button>
+            </div>,
+          ].map((el, i) => <div key={i} className="rise" style={{ animationDelay: `${0.2 + i * 0.1}s` }}>{el}</div>)}
+        </div>
+        <div className="rise hidden md:block" style={{ animationDelay: '.5s' }}>
+          <div className="floaty overflow-hidden rounded-2xl border border-white/15 shadow-glow-lg"><Img a={a} className="aspect-[2/3] w-full object-cover" /></div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Card({ a, saved, onWatch, onToggle }) {
+  return (
+    <div className="spring group relative overflow-hidden rounded-2xl border border-white/10 bg-card hover:-translate-y-2.5 hover:scale-[1.04] hover:border-white/30 hover:shadow-glow-lg">
+      <button onClick={() => onWatch(a)} className="block w-full text-left">
+        <div className="relative aspect-[2/3] overflow-hidden">
+          <Img a={a} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/10 to-transparent" />
+          <span className="absolute right-3 top-3 rounded-lg border border-white/15 bg-bg/60 px-2.5 py-1 text-xs font-bold backdrop-blur-md">★ {a.rating}</span>
+          <span className="absolute inset-x-0 bottom-0 translate-y-3 p-4 text-sm font-bold opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">▶ Смотреть</span>
+        </div>
+        <div className="p-4">
+          <h3 className="line-clamp-2 min-h-[2.5rem] font-display text-sm font-bold leading-snug">{a.title}</h3>
+          <p className="mt-1 text-xs text-silver">{a.year}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">{a.genres.slice(0, 2).map(g => <span key={g} className="rounded bg-white/10 px-2 py-0.5 text-[11px] text-zinc-300">{g}</span>)}</div>
+        </div>
+      </button>
+      <button onClick={() => onToggle(a.id)} aria-pressed={saved} aria-label={saved ? 'Удалить из библиотеки' : 'Добавить в библиотеку'} title={saved ? 'Удалить из библиотеки' : 'Добавить в библиотеку'}
+        className={`spring absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-lg border backdrop-blur-md hover:scale-110 active:scale-90 ${saved ? 'border-white bg-white text-black shadow-glow' : 'border-white/15 bg-bg/60 text-white hover:border-white/50'}`}>
+        <Bookmark filled={saved} />
+      </button>
+    </div>
+  );
+}
+
+function Empty({ icon, title, text, action }) {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center rounded-3xl border border-white/10 bg-white/[0.03] px-8 py-14 text-center backdrop-blur-md" style={{ animation: 'popIn .6s cubic-bezier(.34,1.3,.64,1) both' }}>
+      <div className="floaty mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-white/15 bg-white/5 shadow-glow">{icon}</div>
+      <h3 className="font-display text-lg font-bold">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-silver">{text}</p>
+      {action && <button onClick={action.fn} className="spring mt-6 rounded-xl bg-white px-6 py-3 text-sm font-bold text-black hover:scale-105 active:scale-95">{action.label}</button>}
+    </div>
+  );
+}
+
+/* Плеер: iframe-балансер с озвучками, сезонами и сериями + информационная панель */
+function Player({ a, saved, onToggle, onClose }) {
+  const [loaded, setLoaded] = useState(false);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 7000);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    const k = e => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', k);
+    const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', k); document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg/90 backdrop-blur-md" style={{ animation: 'fadeIn .25s both' }} role="dialog" aria-modal="true" aria-label={a.title}>
+      <div className="mx-auto my-4 max-w-7xl px-4 sm:my-8" style={{ animation: 'popIn .6s cubic-bezier(.34,1.3,.64,1) both' }}>
+        <div className="mb-4 flex justify-end">
+          <button onClick={onClose} className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm backdrop-blur-md transition-all hover:border-white/40 hover:shadow-glow">✕ Закрыть</button>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+          <div>
+            <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-glow">
+              {!loaded && (
+                <div className="absolute inset-0 grid place-items-center text-center">
+                  {!slow
+                    ? <div className="flex flex-col items-center gap-3 text-sm text-silver"><span className="h-8 w-8 rounded-full border-2 border-white/15 border-t-white" style={{ animation: 'spin .9s linear infinite' }} />Загружаем плеер…</div>
+                    : <div className="max-w-sm p-6 text-sm leading-relaxed text-silver">Плеер не загрузился. Здесь встроенные плееры могут блокироваться — на своём хостинге всё откроется, либо запустите его в отдельной вкладке.</div>}
+                </div>
+              )}
+              <iframe key={a.id} src={a.embed} title={a.title} onLoad={() => setLoaded(true)} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full border-0" />
+            </div>
+            <p className="mt-3 text-xs text-silver">В плеере выбираются озвучка, сезон и серия.</p>
+          </div>
+          <aside className="rounded-2xl border border-white/10 bg-card/70 p-5 backdrop-blur-md" style={{ animation: 'slideIn .6s .15s both' }}>
+            <h2 className="font-display text-xl font-bold leading-snug">{a.title}</h2>
+            <p className="mt-1 text-sm text-silver">{a.originalTitle}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 font-bold">★ {a.rating}</span>
+              <span className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-silver">{a.year} год</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">{a.genres.map(g => <span key={g} className="rounded bg-white/10 px-2 py-0.5 text-xs text-zinc-300">{g}</span>)}</div>
+            <p className="mt-4 text-sm leading-relaxed text-silver">{a.description}</p>
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button onClick={() => onToggle(a.id)} aria-pressed={saved}
+                className={`spring group/b flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold hover:scale-[1.02] active:scale-95 ${saved ? 'border-white bg-white text-black shadow-glow' : 'border-white/20 bg-white/5 hover:border-white/50 hover:shadow-glow'}`}>
+                <Bookmark filled={saved} />
+                {saved ? <><span className="group-hover/b:hidden">Добавлено</span><span className="hidden group-hover/b:inline">Удалить из библиотеки</span></> : 'Добавить в библиотеку'}
+              </button>
+              <a href={a.embed} target="_blank" rel="noopener noreferrer" className="spring rounded-xl border border-white/10 px-4 py-3 text-center text-sm font-medium text-silver hover:border-white/30 hover:text-white hover:shadow-glow">Открыть плеер в новой вкладке</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [playing, setPlaying] = useState(null);
+  const [tab, setTab] = useState('all');
+  const [query, setQuery] = useState('');
+  const [toast, setToast] = useState(null);
+  const [lib, setLib] = useState(() => { try { const v = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } });
+  useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(lib)); } catch (e) {} }, [lib]);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2000); return () => clearTimeout(t); }, [toast]);
+
+  const featured = useMemo(() => [...ANIME].sort((x, y) => y.rating - x.rating)[0], []);
+  const toggle = id => {
+    const has = lib.includes(id);
+    setLib(l => has ? l.filter(x => x !== id) : [...l, id]);
+    setToast({ k: Date.now(), text: has ? 'Удалено из библиотеки' : 'Добавлено в библиотеку' });
+  };
+
+  const q = norm(query.trim());
+  const base = tab === 'all' ? ANIME : lib.map(id => ANIME.find(a => a.id === id)).filter(Boolean);
+  const items = q ? base.filter(a => norm(a.title + ' ' + a.originalTitle + ' ' + a.genres.join(' ')).includes(q)) : base;
+  const showHero = tab === 'all' && !q;
+  const goLib = () => { setTab('library'); setTimeout(() => document.getElementById('collection').scrollIntoView(), 30); };
+
+  return (
+    <>
+      <Navbar count={lib.length} onLibrary={goLib} />
+      <main>
+        {showHero && <Hero a={featured} saved={lib.includes(featured.id)} onWatch={setPlaying} onToggle={toggle} />}
+
+        <section id="collection" className={`mx-auto max-w-7xl px-5 pb-24 ${showHero ? 'pt-10' : 'pt-8'}`}>
+          <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="relative grid w-full max-w-sm grid-cols-2 rounded-xl border border-white/10 bg-white/5 p-1 backdrop-blur-md">
+              <span className="absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-glow transition-transform duration-500" style={{ transform: tab === 'all' ? 'none' : 'translateX(100%)', transitionTimingFunction: 'cubic-bezier(.34,1.3,.64,1)' }} />
+              {[['all', 'Вся коллекция', ANIME.length], ['library', 'Моя библиотека', lib.length]].map(([k, l, n]) => (
+                <button key={k} onClick={() => setTab(k)} className={`relative z-10 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors duration-300 ${tab === k ? 'text-black' : 'text-silver hover:text-white'}`}>{l} <span className="opacity-60">{n}</span></button>
+              ))}
+            </div>
+            <div className="group relative w-full md:max-w-sm">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-silver transition-colors group-focus-within:text-white"><SearchIcon /></span>
+              <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск аниме..." aria-label="Поиск аниме"
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-11 text-sm text-white backdrop-blur-md transition-all duration-300 focus:border-white/40 focus:bg-white/[0.08] focus:shadow-glow focus:outline-none" />
+              {query && <button onClick={() => setQuery('')} aria-label="Очистить поиск" className="absolute right-3 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-xs text-white transition-colors hover:bg-white hover:text-black">✕</button>}
+            </div>
+          </div>
+
+          <div className="mb-6 flex items-end justify-between">
+            <h2 className="font-display text-2xl font-bold sm:text-3xl">{tab === 'all' ? 'Вся наша коллекция' : 'Буду смотреть'}</h2>
+            <span className="text-sm text-silver">{q ? `Найдено: ${items.length}` : `Тайтлов: ${items.length}`}</span>
+          </div>
+
+          {items.length > 0 ? (
+            <FlipGrid items={items} render={a => <Card a={a} saved={lib.includes(a.id)} onWatch={setPlaying} onToggle={toggle} />} />
+          ) : q ? (
+            <Empty icon={<SearchIcon />} title="Ничего не найдено" text={`По запросу «${query}» совпадений нет. Попробуйте другое название или жанр.`} action={{ label: 'Сбросить поиск', fn: () => setQuery('') }} />
+          ) : (
+            <Empty icon={<Bookmark size={28} />} title="Библиотека пуста" text="Нажмите на закладку на любой карточке, и аниме появится здесь. Список сохранится даже после обновления страницы." action={{ label: 'Вся коллекция', fn: () => setTab('all') }} />
+          )}
+        </section>
+        <footer className="border-t border-white/10 py-8 text-center text-sm text-zinc-600">animekairo · закрытый клуб для десяти друзей</footer>
+      </main>
+
+      {playing && <Player key={playing.id} a={playing} saved={lib.includes(playing.id)} onToggle={toggle} onClose={() => setPlaying(null)} />}
+      {toast && <div key={toast.k} className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
+        <div className="rounded-full border border-white/20 bg-card/90 px-5 py-2.5 text-sm font-medium shadow-glow backdrop-blur-md" style={{ animation: 'popIn .4s cubic-bezier(.34,1.4,.64,1) both' }}>{toast.text}</div>
+      </div>}
+    </>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
